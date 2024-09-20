@@ -69,7 +69,6 @@ def diceEM(experiment_data: List[NDArray[np.int_]],  # pylint: disable=C0103
       
         prev_bag_of_dice: BagOfDice = bag_of_dice
         bag_of_dice = updated_bag_of_dice
-
     return iterations, bag_of_dice
 
 def e_step(experiment_data: List[NDArray[np.int_]],
@@ -127,24 +126,16 @@ def e_step(experiment_data: List[NDArray[np.int_]],
             count1 = draw[index]
             count2 = draw[index]
             p1 = safe_exponentiate(dice_p1,count1)
-            print("p1 = ",p1)
             p2 = safe_exponentiate(dice_p2,count2)
-            print("p2 = ",p2)
 
             p_overall1 = p_overall1 * p1
             p_overall2 = p_overall2 * p2
-
-        # print("TYPE 1 P = ",p_overall1)
-        # print("TYPE 2 P = ",p_overall2)
 
         count1 = bag_of_dice.die_priors[0]
         count2 = bag_of_dice.die_priors[1]
 
         sum = count1*p_overall1+count2*p_overall2
 
-        print("count1 = ",count1)
-        print("count2 = ",count2)
-        print("sum = ", sum)
         ret = (count1*p_overall1)/sum
         posteriors = [ret,1-ret]
 
