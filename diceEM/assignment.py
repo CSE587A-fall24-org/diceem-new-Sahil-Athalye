@@ -60,9 +60,12 @@ def diceEM(experiment_data: List[NDArray[np.int_]],  # pylint: disable=C0103
                       bag_of_dice.likelihood(experiment_data))
 
         # YOUR CODE HERE. SET REQUIRED VARIABLES BY CALLING e-step AND m-step.
+
         # E-step: compute the expected counts given current parameters        
+        expected_counts = e_step(experiment_data, bag_of_dice)
   
         # M-step: update the parameters given the expected counts
+        updated_bag_of_dice = m_step(expected_counts)
       
         prev_bag_of_dice: BagOfDice = bag_of_dice
         bag_of_dice = updated_bag_of_dice
@@ -109,6 +112,47 @@ def e_step(experiment_data: List[NDArray[np.int_]],
 
     # PUT YOUR CODE HERE, FOLLOWING THE DIRECTIONS ABOVE
 
+    # Iterate over the draws (each draw corresponds to an observed set of rolls)
+    for draw in experiment_data:
+        dice = bag_of_dice.dice
+        die_1 = dice[0]
+        die_2 = dice[1]
+        probs_1 = die_1.face_probs
+        probs_2 = die_2.face_probs
+        p_overall1 = 1.0
+        p_overall2 = 1.0
+        for index in range(len(draw)):
+            dice_p1 = probs_1[index]
+            dice_p2 = probs_2[index]
+            count1 = draw[index]
+            count2 = draw[index]
+            p1 = safe_exponentiate(dice_p1,count1)
+            print("p1 = ",p1)
+            p2 = safe_exponentiate(dice_p2,count2)
+            print("p2 = ",p2)
+
+            p_overall1 = p_overall1 * p1
+            p_overall2 = p_overall2 * p2
+
+        # print("TYPE 1 P = ",p_overall1)
+        # print("TYPE 2 P = ",p_overall2)
+
+        count1 = bag_of_dice.die_priors[0]
+        count2 = bag_of_dice.die_priors[1]
+
+        sum = count1*p_overall1+count2*p_overall2
+
+        print("count1 = ",count1)
+        print("count2 = ",count2)
+        print("sum = ", sum)
+        ret = (count1*p_overall1)/sum
+        posteriors = [ret,1-ret]
+
+        # For each die type, compute the expected counts
+        for die_index, die in enumerate(bag_of_dice.dice):
+            # Compute expected counts for each face of the current die
+            expected_counts[die_index] += posteriors[die_index] * draw
+
     return expected_counts
 
 
@@ -134,14 +178,33 @@ def m_step(expected_counts_by_die: NDArray[np.float_]):
     updated_type_1_frequency = np.sum(expected_counts_by_die[0])
     updated_type_2_frequency = np.sum(expected_counts_by_die[1])
 
-    # REPLACE EACH NONE BELOW WITH YOUR CODE. 
-    updated_priors = None
-    updated_type_1_face_probs = None
-    updated_type_2_face_probs = None
+    # # REPLACE EACH NONE BELOW WITH YOUR CODE. 
+    # updated_priors = None
+    # updated_type_1_face_probs = None
+    # updated_type_2_face_probs = None
     
-    updated_bag_of_dice = BagOfDice(updated_priors,
-                                    [Die(updated_type_1_face_probs),
-                                     Die(updated_type_2_face_probs)])
+    # updated_bag_of_dice = BagOfDice(updated_priors,
+    #                                 [Die(updated_type_1_face_probs),
+    #                                  Die(updated_type_2_face_probs)])
+
+    # Total number of rolls (sum of expected counts for all dice)
+    total_rolls = updated_type_1_frequency + updated_type_2_frequency
+
+    # Updated priors: the probability of selecting each die
+    updated_priors = list([
+        updated_type_1_frequency / total_rolls,  # Prior for die 1
+        updated_type_2_frequency / total_rolls   # Prior for die 2
+    ])
+
+    # Updated face probabilities for each die (normalized expected counts for each face)
+    updated_type_1_face_probs = expected_counts_by_die[0] / updated_type_1_frequency
+    updated_type_2_face_probs = expected_counts_by_die[1] / updated_type_2_frequency
+
+    # Create updated BagOfDice object with new priors and face probabilities
+    updated_bag_of_dice = BagOfDice(
+        updated_priors,
+        [Die(updated_type_1_face_probs), Die(updated_type_2_face_probs)]
+    )
 
     return updated_bag_of_dice
 
@@ -182,3 +245,60 @@ def generate_sample(die_type_counts: Tuple[int],
     # array of num_draws arrays each containing rolls_per_draw rolls.
 
     return list(map(roll, die_types_drawn))
+
+def dice_posterior(sample_draw: List[int], 
+                   die_type_counts: Tuple[int],
+                   dice: Tuple[Die]) -> float:
+    """Calculates the posterior probability of a type 1 vs a type 2 die,
+    based on the number of times each face appears in the draw, and the
+    relative numbers of type 1 and type 2 dice in the bag, as well as the
+    face probabilities for type 1 and type 2 dice. The single number returned
+    is the posterior probability of the Type 1 die. Note: we expect a BagOfDice
+    object with only two dice.
+
+    """
+    # Requiring only two dice with the same number of faces simplifies the
+    # problem a bit.
+    if len(dice) != 2:
+        raise ValueError('This code requires exactly 2 dice')
+    if dice[0].num_faces != dice[1].num_faces:
+        raise ValueError('This code requires two dice with the same number of faces')
+    if len(sample_draw) != dice[0].num_faces:
+        raise ValueError('The sample draw is a list of observed counts for the \
+                         faces. Its length must be equal to the number of faces \
+                         on the dice.')
+    die_1 = dice[0]
+    die_2 = dice[1]
+    probs_1 = die_1.face_probs
+    probs_2 = die_2.face_probs
+    p_overall1 = 1
+    p_overall2 = 1
+    for index in range(len(sample_draw)):
+        dice_p1 = probs_1[index]
+        dice_p2 = probs_2[index]
+        count1 = sample_draw[index]
+        count2 = sample_draw[index]
+        p1 = safe_exponentiate(dice_p1,count1)
+        print("p1 = ",p1)
+        p2 = safe_exponentiate(dice_p2,count2)
+        print("p2 = ",p2)
+
+        p_overall1 = p_overall1 * p1
+        p_overall2 = p_overall2 * p2
+
+    # print("TYPE 1 P = ",p_overall1)
+    # print("TYPE 2 P = ",p_overall2)
+
+    count1 = die_type_counts[0]
+    count2 = die_type_counts[1]
+
+    sum = count1*p_overall1+count2*p_overall2
+
+    print("count1 = ",count1)
+    print("count2 = ",count2)
+    print("sum = ", sum)
+    ret = (count1*p_overall1)/sum
+
+    # print(ret)
+
+    return ret
